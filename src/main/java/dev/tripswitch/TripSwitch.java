@@ -1,6 +1,7 @@
 package dev.tripswitch;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -21,6 +22,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.*;
@@ -65,7 +67,7 @@ public class TripSwitch implements AutoCloseable {
     private final String ingestSecret;
     private final boolean failOpen;
     private final String baseUrl;
-    private final TriConsumer onStateChange;
+    private final StateChangeListener onStateChange;
     private final Supplier<String> traceIdExtractor;
     private final Map<String, String> globalTags;
     private final Duration metaSyncInterval;
@@ -99,7 +101,7 @@ public class TripSwitch implements AutoCloseable {
     private final ScheduledExecutorService scheduler;
     private final ExecutorService flushExecutor;
     private volatile EventSource eventSource;
-    private volatile boolean closed;
+    private final AtomicBoolean closed = new AtomicBoolean(false);
 
     private TripSwitch(Builder builder) {
         this.projectId = builder.projectId;
@@ -117,13 +119,6 @@ public class TripSwitch implements AutoCloseable {
         this.mapper = new ObjectMapper()
                 .registerModule(new JavaTimeModule())
                 .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-
-        // Daemon thread factories
-        ThreadFactory daemonFactory = r -> {
-            Thread t = new Thread(r);
-            t.setDaemon(true);
-            return t;
-        };
 
         this.scheduler = Executors.newScheduledThreadPool(2, r -> {
             Thread t = new Thread(r);
@@ -409,7 +404,7 @@ public class TripSwitch implements AutoCloseable {
     }
 
     /** Fetches project health status from the API. */
-    public Status getStatus() throws IOException {
+    public Status getStatus() {
         Request req = new Request.Builder()
                 .url(baseUrl + "/v1/projects/" + projectId + "/status")
                 .header("Accept", "application/json")
@@ -421,6 +416,8 @@ public class TripSwitch implements AutoCloseable {
                 throw new IOException("tripswitch: unexpected status code: " + resp.code());
             }
             return mapper.readValue(resp.body().bytes(), Status.class);
+        } catch (IOException e) {
+            throw new TripSwitchException("failed to fetch project status", e);
         }
     }
 
@@ -547,8 +544,7 @@ public class TripSwitch implements AutoCloseable {
 
     /** Gracefully shuts down, flushing buffered samples within the timeout. */
     public void close(Duration timeout) {
-        if (closed) return;
-        closed = true;
+        if (!closed.compareAndSet(false, true)) return;
 
         // Close SSE
         if (eventSource != null) {
@@ -616,7 +612,7 @@ public class TripSwitch implements AutoCloseable {
             public void onClosed(EventSource es) {
                 log.debug("SSE connection closed");
                 sseConnected = false;
-                if (!closed) {
+                if (!closed.get()) {
                     sseReconnects.incrementAndGet();
                     // Reconnect
                     scheduler.schedule(() -> startSseListener(), 1, TimeUnit.SECONDS);
@@ -625,7 +621,7 @@ public class TripSwitch implements AutoCloseable {
 
             @Override
             public void onFailure(EventSource es, Throwable t, Response response) {
-                if (closed) return;
+                if (closed.get()) return;
                 sseConnected = false;
                 sseReconnects.incrementAndGet();
                 if (t != null) {
@@ -693,10 +689,14 @@ public class TripSwitch implements AutoCloseable {
             String signature = null;
             if (ingestSecret != null && !ingestSecret.isEmpty()) {
                 byte[] secretBytes = hexDecode(ingestSecret);
-                String message = timestampStr + "." + new String(compressed, StandardCharsets.ISO_8859_1);
+                byte[] tsBytes = timestampStr.getBytes(StandardCharsets.UTF_8);
+                byte[] message = new byte[tsBytes.length + 1 + compressed.length];
+                System.arraycopy(tsBytes, 0, message, 0, tsBytes.length);
+                message[tsBytes.length] = (byte) '.';
+                System.arraycopy(compressed, 0, message, tsBytes.length + 1, compressed.length);
                 Mac mac = Mac.getInstance("HmacSHA256");
                 mac.init(new SecretKeySpec(secretBytes, "HmacSHA256"));
-                byte[] hmacBytes = mac.doFinal(message.getBytes(StandardCharsets.ISO_8859_1));
+                byte[] hmacBytes = mac.doFinal(message);
                 signature = "v1=" + hexEncode(hmacBytes);
             }
 
@@ -705,7 +705,7 @@ public class TripSwitch implements AutoCloseable {
             String url = baseUrl + "/v1/projects/" + projectId + "/ingest";
 
             for (int attempt = 0; attempt <= backoffs.length; attempt++) {
-                if (closed) {
+                if (closed.get()) {
                     droppedSamples.addAndGet(batch.size());
                     return;
                 }
@@ -731,7 +731,7 @@ public class TripSwitch implements AutoCloseable {
                     }
                     log.warn("Batch send failed: status={}, attempt={}", resp.code(), attempt + 1);
                 } catch (IOException e) {
-                    if (!closed) {
+                    if (!closed.get()) {
                         log.warn("Batch send failed: attempt={}", attempt + 1, e);
                     }
                 }
@@ -882,6 +882,7 @@ public class TripSwitch implements AutoCloseable {
             @JsonProperty("allow_rate") Double allowRate
     ) {}
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     record Sample(
             @JsonProperty("router_id") String routerId,
             @JsonProperty("metric") String metric,
@@ -900,9 +901,9 @@ public class TripSwitch implements AutoCloseable {
     @JsonIgnoreProperties(ignoreUnknown = true)
     record RoutersMetaResponse(@JsonProperty("routers") List<RouterMeta> routers) {}
 
-    /** Callback for state changes. */
+    /** Callback for breaker state changes. */
     @FunctionalInterface
-    public interface TriConsumer {
+    public interface StateChangeListener {
         void accept(String name, String from, String to);
     }
 
@@ -918,7 +919,7 @@ public class TripSwitch implements AutoCloseable {
         private String ingestSecret;
         private boolean failOpen = true;
         private String baseUrl = "https://api.tripswitch.dev";
-        private TriConsumer onStateChange;
+        private StateChangeListener onStateChange;
         private Supplier<String> traceIdExtractor;
         private Duration metaSyncInterval = DEFAULT_META_SYNC_INTERVAL;
         private Map<String, String> globalTags;
@@ -930,7 +931,7 @@ public class TripSwitch implements AutoCloseable {
         public Builder ingestSecret(String secret) { this.ingestSecret = secret; return this; }
         public Builder failOpen(boolean failOpen) { this.failOpen = failOpen; return this; }
         public Builder baseUrl(String url) { this.baseUrl = url; return this; }
-        public Builder onStateChange(TriConsumer callback) { this.onStateChange = callback; return this; }
+        public Builder onStateChange(StateChangeListener callback) { this.onStateChange = callback; return this; }
         public Builder traceIdExtractor(Supplier<String> extractor) { this.traceIdExtractor = extractor; return this; }
         public Builder metadataSyncInterval(Duration interval) { this.metaSyncInterval = interval; return this; }
         public Builder globalTags(Map<String, String> tags) { this.globalTags = tags; return this; }
