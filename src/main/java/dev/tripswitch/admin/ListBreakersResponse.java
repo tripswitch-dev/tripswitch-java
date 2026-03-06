@@ -11,5 +11,6 @@ public record ListBreakersResponse(
         @JsonProperty("breakers") List<Breaker> breakers,
         @JsonProperty("count") int count,
         @JsonProperty("hash") String hash,
-        @JsonProperty("updated_at") String updatedAt
+        @JsonProperty("updated_at") String updatedAt,
+        @JsonProperty("next_cursor") String nextCursor
 ) {}

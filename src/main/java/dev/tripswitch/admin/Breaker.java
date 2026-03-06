@@ -29,4 +29,12 @@ public record Breaker(
         @JsonProperty("recovery_allow_rate_ramp_steps") int recoveryAllowRateRampSteps,
         @JsonProperty("actions") Map<String, Object> actions,
         @JsonProperty("metadata") Map<String, String> metadata
-) {}
+) {
+    /** Returns a copy of this breaker with the given router ID. */
+    public Breaker withRouterId(String routerId) {
+        return new Breaker(id, routerId, name, metric, kind, kindParams, op, threshold, windowMs,
+                minCount, minStateDurationMs, cooldownMs, evalIntervalMs, halfOpenConfirmationMs,
+                halfOpenBackoffEnabled, halfOpenBackoffCapMs, halfOpenIndeterminatePolicy,
+                recoveryWindowMs, recoveryAllowRateRampSteps, actions, metadata);
+    }
+}

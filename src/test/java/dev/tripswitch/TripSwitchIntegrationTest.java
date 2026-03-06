@@ -41,27 +41,24 @@ class TripSwitchIntegrationTest {
     void testNewClient() {
         skipIfNoEnv();
 
-        TripSwitch client = TripSwitch.builder(PROJECT_ID)
+        try (var client = TripSwitch.builder(PROJECT_ID)
                 .apiKey(API_KEY)
                 .ingestSecret(INGEST_SECRET)
                 .baseUrl(BASE_URL)
-                .build(Duration.ofSeconds(10));
-
-        assertNotNull(client);
-        client.close(Duration.ofSeconds(5));
+                .build(Duration.ofSeconds(10))) {
+            assertNotNull(client);
+        }
     }
 
     @Test
     void testExecute() {
         skipIfNoEnv();
 
-        TripSwitch client = TripSwitch.builder(PROJECT_ID)
+        try (var client = TripSwitch.builder(PROJECT_ID)
                 .apiKey(API_KEY)
                 .ingestSecret(INGEST_SECRET)
                 .baseUrl(BASE_URL)
-                .build(Duration.ofSeconds(10));
-
-        try {
+                .build(Duration.ofSeconds(10))) {
             String result = client.execute(() -> "success",
                     TripSwitch.withBreakers(BREAKER_NAME),
                     TripSwitch.withRouter(ROUTER_ID),
@@ -70,8 +67,6 @@ class TripSwitchIntegrationTest {
             assertEquals("success", result);
         } catch (BreakerOpenException e) {
             // Expected if breaker is tripped
-        } finally {
-            client.close(Duration.ofSeconds(5));
         }
     }
 
@@ -79,82 +74,74 @@ class TripSwitchIntegrationTest {
     void testStats() {
         skipIfNoEnv();
 
-        TripSwitch client = TripSwitch.builder(PROJECT_ID)
+        try (var client = TripSwitch.builder(PROJECT_ID)
                 .apiKey(API_KEY)
                 .ingestSecret(INGEST_SECRET)
                 .baseUrl(BASE_URL)
-                .build(Duration.ofSeconds(10));
-
-        SDKStats stats = client.stats();
-        assertTrue(stats.sseConnected(), "SSE should be connected after init");
-
-        client.close(Duration.ofSeconds(5));
+                .build(Duration.ofSeconds(10))) {
+            SDKStats stats = client.stats();
+            assertTrue(stats.sseConnected(), "SSE should be connected after init");
+        }
     }
 
     @Test
     void testGracefulShutdown() {
         skipIfNoEnv();
 
-        TripSwitch client = TripSwitch.builder(PROJECT_ID)
+        try (var client = TripSwitch.builder(PROJECT_ID)
                 .apiKey(API_KEY)
                 .ingestSecret(INGEST_SECRET)
                 .baseUrl(BASE_URL)
-                .build(Duration.ofSeconds(10));
-
-        // Execute a few tasks
-        for (int i = 0; i < 5; i++) {
-            final int iteration = i;
-            try {
-                client.execute(() -> iteration,
-                        TripSwitch.withBreakers(BREAKER_NAME),
-                        TripSwitch.withRouter(ROUTER_ID),
-                        TripSwitch.withMetrics(Map.of(METRIC_NAME, TripSwitch.LATENCY))
-                );
-            } catch (BreakerOpenException ignored) {
+                .build(Duration.ofSeconds(10))) {
+            // Execute a few tasks
+            for (int i = 0; i < 5; i++) {
+                final int iteration = i;
+                try {
+                    client.execute(() -> iteration,
+                            TripSwitch.withBreakers(BREAKER_NAME),
+                            TripSwitch.withRouter(ROUTER_ID),
+                            TripSwitch.withMetrics(Map.of(METRIC_NAME, TripSwitch.LATENCY))
+                    );
+                } catch (BreakerOpenException ignored) {
+                }
             }
         }
-
-        assertDoesNotThrow(() -> client.close(Duration.ofSeconds(5)));
     }
 
     @Test
-    void testGetStatus() throws Exception {
+    void testGetStatus() {
         skipIfNoEnv();
 
-        TripSwitch client = TripSwitch.builder(PROJECT_ID)
+        try (var client = TripSwitch.builder(PROJECT_ID)
                 .apiKey(API_KEY)
                 .baseUrl(BASE_URL)
-                .build(Duration.ofSeconds(10));
-
-        Status status = client.getStatus();
-        assertNotNull(status);
-        assertTrue(status.openCount() >= 0);
-        assertTrue(status.closedCount() >= 0);
-
-        client.close(Duration.ofSeconds(5));
+                .build(Duration.ofSeconds(10))) {
+            Status status = client.getStatus();
+            assertNotNull(status);
+            assertTrue(status.openCount() >= 0);
+            assertTrue(status.closedCount() >= 0);
+        }
     }
 
     @Test
     void testMetadataSync() throws Exception {
         skipIfNoBasicEnv();
 
-        TripSwitch client = TripSwitch.builder(PROJECT_ID)
+        try (var client = TripSwitch.builder(PROJECT_ID)
                 .apiKey(API_KEY)
                 .baseUrl(BASE_URL)
                 .metadataSyncInterval(Duration.ofSeconds(5))
-                .build(Duration.ofSeconds(10));
+                .build(Duration.ofSeconds(10))) {
+            // Give metadata sync time
+            Thread.sleep(500);
 
-        // Give metadata sync time
-        Thread.sleep(500);
+            var breakers = client.getBreakersMetadata();
+            var routers = client.getRoutersMetadata();
 
-        var breakers = client.getBreakersMetadata();
-        var routers = client.getRoutersMetadata();
-
-        // At minimum, metadata should have been attempted
-        System.out.printf("Cached %d breakers, %d routers%n",
-                breakers != null ? breakers.size() : 0,
-                routers != null ? routers.size() : 0);
-
-        client.close(Duration.ofSeconds(5));
+            // At minimum, metadata should have been attempted
+            System.out.printf("Cached %d breakers, %d routers%n",
+                    breakers != null ? breakers.size() : 0,
+                    routers != null ? routers.size() : 0);
+        }
     }
 }

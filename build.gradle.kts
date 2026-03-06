@@ -24,8 +24,8 @@ val jacksonVersion = "2.17.2"
 dependencies {
     api("com.squareup.okhttp3:okhttp:$okhttpVersion")
     api("com.squareup.okhttp3:okhttp-sse:$okhttpVersion")
-    api("com.fasterxml.jackson.core:jackson-databind:$jacksonVersion")
-    api("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:$jacksonVersion")
+    implementation("com.fasterxml.jackson.core:jackson-databind:$jacksonVersion")
+    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:$jacksonVersion")
     api("org.slf4j:slf4j-api:2.0.13")
 
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.3")
@@ -65,8 +65,8 @@ publishing {
                 url.set("https://github.com/tripswitch-dev/tripswitch-java")
                 licenses {
                     license {
-                        name.set("MIT License")
-                        url.set("https://opensource.org/licenses/MIT")
+                        name.set("Apache License 2.0")
+                        url.set("https://www.apache.org/licenses/LICENSE-2.0")
                     }
                 }
                 developers {

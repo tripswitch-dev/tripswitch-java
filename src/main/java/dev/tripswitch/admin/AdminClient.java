@@ -235,47 +235,24 @@ public class AdminClient implements Closeable {
     public Breaker createBreaker(String projectId, CreateBreakerInput input, RequestOptions... opts) {
         BreakerResponse resp = execute("POST", "/v1/projects/" + projectId + "/breakers", input, null,
                 firstOr(opts), BreakerResponse.class);
-        if (resp != null && resp.breaker() != null && resp.routerId() != null) {
-            return new Breaker(resp.breaker().id(), resp.routerId(), resp.breaker().name(),
-                    resp.breaker().metric(), resp.breaker().kind(), resp.breaker().kindParams(),
-                    resp.breaker().op(), resp.breaker().threshold(), resp.breaker().windowMs(),
-                    resp.breaker().minCount(), resp.breaker().minStateDurationMs(), resp.breaker().cooldownMs(),
-                    resp.breaker().evalIntervalMs(), resp.breaker().halfOpenConfirmationMs(),
-                    resp.breaker().halfOpenBackoffEnabled(), resp.breaker().halfOpenBackoffCapMs(),
-                    resp.breaker().halfOpenIndeterminatePolicy(), resp.breaker().recoveryWindowMs(),
-                    resp.breaker().recoveryAllowRateRampSteps(), resp.breaker().actions(), resp.breaker().metadata());
-        }
-        return resp != null ? resp.breaker() : null;
+        return unwrapBreaker(resp);
     }
 
     public Breaker getBreaker(String projectId, String breakerId, RequestOptions... opts) {
         BreakerResponse resp = execute("GET", "/v1/projects/" + projectId + "/breakers/" + breakerId, null, null,
                 firstOr(opts), BreakerResponse.class);
-        if (resp != null && resp.breaker() != null && resp.routerId() != null) {
-            return new Breaker(resp.breaker().id(), resp.routerId(), resp.breaker().name(),
-                    resp.breaker().metric(), resp.breaker().kind(), resp.breaker().kindParams(),
-                    resp.breaker().op(), resp.breaker().threshold(), resp.breaker().windowMs(),
-                    resp.breaker().minCount(), resp.breaker().minStateDurationMs(), resp.breaker().cooldownMs(),
-                    resp.breaker().evalIntervalMs(), resp.breaker().halfOpenConfirmationMs(),
-                    resp.breaker().halfOpenBackoffEnabled(), resp.breaker().halfOpenBackoffCapMs(),
-                    resp.breaker().halfOpenIndeterminatePolicy(), resp.breaker().recoveryWindowMs(),
-                    resp.breaker().recoveryAllowRateRampSteps(), resp.breaker().actions(), resp.breaker().metadata());
-        }
-        return resp != null ? resp.breaker() : null;
+        return unwrapBreaker(resp);
     }
 
     public Breaker updateBreaker(String projectId, String breakerId, UpdateBreakerInput input, RequestOptions... opts) {
         BreakerResponse resp = execute("PATCH", "/v1/projects/" + projectId + "/breakers/" + breakerId, input, null,
                 firstOr(opts), BreakerResponse.class);
+        return unwrapBreaker(resp);
+    }
+
+    private static Breaker unwrapBreaker(BreakerResponse resp) {
         if (resp != null && resp.breaker() != null && resp.routerId() != null) {
-            return new Breaker(resp.breaker().id(), resp.routerId(), resp.breaker().name(),
-                    resp.breaker().metric(), resp.breaker().kind(), resp.breaker().kindParams(),
-                    resp.breaker().op(), resp.breaker().threshold(), resp.breaker().windowMs(),
-                    resp.breaker().minCount(), resp.breaker().minStateDurationMs(), resp.breaker().cooldownMs(),
-                    resp.breaker().evalIntervalMs(), resp.breaker().halfOpenConfirmationMs(),
-                    resp.breaker().halfOpenBackoffEnabled(), resp.breaker().halfOpenBackoffCapMs(),
-                    resp.breaker().halfOpenIndeterminatePolicy(), resp.breaker().recoveryWindowMs(),
-                    resp.breaker().recoveryAllowRateRampSteps(), resp.breaker().actions(), resp.breaker().metadata());
+            return resp.breaker().withRouterId(resp.routerId());
         }
         return resp != null ? resp.breaker() : null;
     }
@@ -428,22 +405,25 @@ public class AdminClient implements Closeable {
             private boolean done;
             private dev.tripswitch.TripSwitchException error;
             private boolean started;
+            private String cursor;
 
             @Override
             public boolean hasNext() {
-                if (error != null) return false;
+                if (error != null) throw error;
                 if (items != null && index < items.size()) return true;
                 if (done) return false;
                 try {
-                    ListBreakersResponse resp = listBreakers(projectId, started ? new ListParams(params.limit()) : params, reqOpts != null ? new RequestOptions[]{reqOpts} : new RequestOptions[0]);
+                    ListParams p = started ? new ListParams(cursor, params.limit()) : params;
                     started = true;
+                    ListBreakersResponse resp = listBreakers(projectId, p, reqOpts != null ? new RequestOptions[]{reqOpts} : new RequestOptions[0]);
                     items = resp.breakers();
                     index = 0;
-                    done = true;
+                    cursor = resp.nextCursor();
+                    done = cursor == null || cursor.isEmpty();
                     return items != null && !items.isEmpty();
                 } catch (dev.tripswitch.TripSwitchException e) {
                     error = e;
-                    return false;
+                    throw e;
                 }
             }
 
@@ -466,22 +446,25 @@ public class AdminClient implements Closeable {
             private boolean done;
             private dev.tripswitch.TripSwitchException error;
             private boolean started;
+            private String cursor;
 
             @Override
             public boolean hasNext() {
-                if (error != null) return false;
+                if (error != null) throw error;
                 if (items != null && index < items.size()) return true;
                 if (done) return false;
                 try {
-                    ListRoutersResponse resp = listRouters(projectId, started ? new ListParams(params.limit()) : params, reqOpts != null ? new RequestOptions[]{reqOpts} : new RequestOptions[0]);
+                    ListParams p = started ? new ListParams(cursor, params.limit()) : params;
                     started = true;
+                    ListRoutersResponse resp = listRouters(projectId, p, reqOpts != null ? new RequestOptions[]{reqOpts} : new RequestOptions[0]);
                     items = resp.routers();
                     index = 0;
-                    done = true;
+                    cursor = resp.nextCursor();
+                    done = cursor == null || cursor.isEmpty();
                     return items != null && !items.isEmpty();
                 } catch (dev.tripswitch.TripSwitchException e) {
                     error = e;
-                    return false;
+                    throw e;
                 }
             }
 
@@ -508,7 +491,7 @@ public class AdminClient implements Closeable {
 
             @Override
             public boolean hasNext() {
-                if (error != null) return false;
+                if (error != null) throw error;
                 if (items != null && index < items.size()) return true;
                 if (done) return false;
                 try {
@@ -525,7 +508,7 @@ public class AdminClient implements Closeable {
                     return items != null && !items.isEmpty();
                 } catch (dev.tripswitch.TripSwitchException e) {
                     error = e;
-                    return false;
+                    throw e;
                 }
             }
 
@@ -552,7 +535,7 @@ public class AdminClient implements Closeable {
 
             @Override
             public boolean hasNext() {
-                if (error != null) return false;
+                if (error != null) throw error;
                 if (items != null && index < items.size()) return true;
                 if (done) return false;
                 try {
@@ -566,7 +549,7 @@ public class AdminClient implements Closeable {
                     return items != null && !items.isEmpty();
                 } catch (dev.tripswitch.TripSwitchException e) {
                     error = e;
-                    return false;
+                    throw e;
                 }
             }
 

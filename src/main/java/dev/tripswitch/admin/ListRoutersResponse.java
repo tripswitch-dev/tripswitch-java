@@ -8,5 +8,6 @@ import java.util.List;
 /** Response from listing routers. */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ListRoutersResponse(
-        @JsonProperty("routers") List<Router> routers
+        @JsonProperty("routers") List<Router> routers,
+        @JsonProperty("next_cursor") String nextCursor
 ) {}
