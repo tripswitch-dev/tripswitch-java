@@ -58,6 +58,7 @@ tasks.withType<Javadoc> {
 publishing {
     publications {
         create<MavenPublication>("mavenJava") {
+            artifactId = "tripswitch-java"
             from(components["java"])
             pom {
                 name.set("Tripswitch Java SDK")
@@ -84,4 +85,23 @@ publishing {
             }
         }
     }
+    repositories {
+        maven {
+            name = "OSSRH"
+            url = uri("https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/")
+            credentials {
+                username = project.findProperty("ossrhUsername") as String? ?: System.getenv("OSSRH_USERNAME") ?: ""
+                password = project.findProperty("ossrhPassword") as String? ?: System.getenv("OSSRH_PASSWORD") ?: ""
+            }
+        }
+    }
+}
+
+signing {
+    val signingKey = project.findProperty("signingKey") as String? ?: System.getenv("GPG_SIGNING_KEY")
+    val signingPassword = project.findProperty("signingPassword") as String? ?: System.getenv("GPG_SIGNING_PASSWORD")
+    if (signingKey != null && signingPassword != null) {
+        useInMemoryPgpKeys(signingKey, signingPassword)
+    }
+    sign(publishing.publications["mavenJava"])
 }

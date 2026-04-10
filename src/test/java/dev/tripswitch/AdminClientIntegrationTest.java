@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Integration tests for the admin client.
@@ -17,6 +18,7 @@ class AdminClientIntegrationTest {
     private static final String API_KEY = System.getenv().getOrDefault("TRIPSWITCH_ADMIN_KEY", System.getenv("TRIPSWITCH_API_KEY"));
     private static final String PROJECT_ID = System.getenv("TRIPSWITCH_PROJECT_ID");
     private static final String BASE_URL = System.getenv().getOrDefault("TRIPSWITCH_BASE_URL", "https://api.tripswitch.dev");
+    private static final String WORKSPACE_ID = System.getenv("TRIPSWITCH_WORKSPACE_ID");
 
     private void skipIfNoEnv() {
         Assumptions.assumeTrue(API_KEY != null && !API_KEY.isEmpty(), "TRIPSWITCH_API_KEY not set");
@@ -50,7 +52,7 @@ class AdminClientIntegrationTest {
             String projectName = "integration-test-project-" + System.nanoTime();
 
             // Create
-            Project project = client.createProject(new CreateProjectInput(projectName));
+            Project project = client.createProject(new CreateProjectInput(projectName, WORKSPACE_ID));
             assertNotNull(project);
             assertEquals(projectName, project.name());
 
@@ -151,6 +153,66 @@ class AdminClientIntegrationTest {
             ListEventsResponse result = client.listEvents(PROJECT_ID, new ListEventsParams(10));
             assertNotNull(result);
             System.out.printf("Found %d events%n", result.events().size());
+        }
+    }
+
+    @Test
+    void testListProjects() {
+        skipIfNoEnv();
+
+        try (AdminClient client = newClient()) {
+            ListProjectsResponse result = client.listProjects();
+            assertNotNull(result);
+            assertTrue(result.projects().stream().anyMatch(p -> p.id().equals(PROJECT_ID)),
+                    "Expected test project to appear in listProjects");
+        }
+    }
+
+    @Test
+    void testListProjectKeys() {
+        skipIfNoEnv();
+
+        try (AdminClient client = newClient()) {
+            ListProjectKeysResponse result = client.listProjectKeys(PROJECT_ID);
+            assertNotNull(result);
+            assertNotNull(result.keys());
+            System.out.printf("Found %d project keys%n", result.keys().size());
+        }
+    }
+
+    @Test
+    void testGetWorkspace() {
+        skipIfNoEnv();
+        assumeTrue(WORKSPACE_ID != null && !WORKSPACE_ID.isEmpty(), "TRIPSWITCH_WORKSPACE_ID not set");
+
+        try (AdminClient client = newClient()) {
+            Workspace workspace = client.getWorkspace(WORKSPACE_ID);
+            assertNotNull(workspace);
+            assertEquals(WORKSPACE_ID, workspace.id());
+        }
+    }
+
+    @Test
+    void testNotFoundError() {
+        skipIfNoEnv();
+
+        try (AdminClient client = newClient()) {
+            assertThrows(NotFoundException.class,
+                    () -> client.getProject("00000000-0000-0000-0000-000000000000"));
+        }
+    }
+
+    @Test
+    void testUnauthorizedError() {
+        skipIfNoEnv();
+
+        try (AdminClient client = AdminClient.builder()
+                .apiKey("eb_admin_invalid")
+                .baseUrl(BASE_URL)
+                .build()) {
+            ApiException ex = assertThrows(ApiException.class, () -> client.getProject("any"));
+            assertTrue(ex instanceof UnauthorizedException || ex instanceof ForbiddenException,
+                    "Expected Unauthorized or Forbidden, got: " + ex.getClass().getSimpleName());
         }
     }
 }
