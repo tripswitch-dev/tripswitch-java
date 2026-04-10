@@ -31,6 +31,11 @@ public record Breaker(
         @JsonProperty("actions") Map<String, Object> actions,
         @JsonProperty("metadata") Map<String, String> metadata
 ) {
+    /** Normalizes null fields that Jackson may leave unset for absent JSON keys. */
+    public Breaker {
+        routerIds = routerIds != null ? routerIds : List.of();
+    }
+
     /** Returns a copy of this breaker with the given router IDs. */
     public Breaker withRouterIds(List<String> routerIds) {
         return new Breaker(id, routerIds, name, metric, kind, kindParams, op, threshold, windowMs,

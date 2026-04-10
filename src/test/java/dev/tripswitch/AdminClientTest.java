@@ -199,6 +199,7 @@ class AdminClientTest {
         Breaker breaker = newClient().updateBreaker("proj_123", "b_456",
                 UpdateBreakerInput.builder().threshold(0.75).build());
         assertEquals(0.75, breaker.threshold(), 0.001);
+        assertEquals(List.of("r_789"), breaker.routerIds());
 
         RecordedRequest req = server.takeRequest(1, TimeUnit.SECONDS);
         assertEquals("PATCH", req.getMethod());
@@ -561,6 +562,85 @@ class AdminClientTest {
         RecordedRequest req = server.takeRequest(1, TimeUnit.SECONDS);
         assertEquals("PATCH", req.getMethod());
         assertEquals("/v1/projects/proj_123/routers/r_789/metadata", req.getPath());
+    }
+
+    // ---- Workspaces ----
+
+    @Test
+    void testListWorkspaces() throws Exception {
+        server.enqueue(new MockResponse()
+                .setHeader("Content-Type", "application/json")
+                .setBody("{\"workspaces\":[{\"id\":\"ws_1\",\"name\":\"default\",\"slug\":\"default\",\"org_id\":\"org_1\",\"inserted_at\":\"2024-01-01T00:00:00Z\"}]}"));
+
+        ListWorkspacesResponse result = newClient().listWorkspaces();
+        assertEquals(1, result.workspaces().size());
+        assertEquals("ws_1", result.workspaces().get(0).id());
+        assertEquals("default", result.workspaces().get(0).name());
+        assertEquals("org_1", result.workspaces().get(0).orgId());
+
+        RecordedRequest req = server.takeRequest(1, TimeUnit.SECONDS);
+        assertEquals("GET", req.getMethod());
+        assertEquals("/v1/workspaces", req.getPath());
+    }
+
+    @Test
+    void testCreateWorkspace() throws Exception {
+        server.enqueue(new MockResponse()
+                .setHeader("Content-Type", "application/json")
+                .setResponseCode(201)
+                .setBody("{\"id\":\"ws_2\",\"name\":\"staging\",\"slug\":\"staging\",\"org_id\":\"org_1\",\"inserted_at\":\"2024-06-01T00:00:00Z\"}"));
+
+        Workspace ws = newClient().createWorkspace(new CreateWorkspaceInput("staging", "staging"));
+        assertEquals("ws_2", ws.id());
+        assertEquals("staging", ws.name());
+        assertEquals("staging", ws.slug());
+        assertEquals("org_1", ws.orgId());
+
+        RecordedRequest req = server.takeRequest(1, TimeUnit.SECONDS);
+        assertEquals("POST", req.getMethod());
+        assertEquals("/v1/workspaces", req.getPath());
+    }
+
+    @Test
+    void testGetWorkspace() throws Exception {
+        server.enqueue(new MockResponse()
+                .setHeader("Content-Type", "application/json")
+                .setBody("{\"id\":\"ws_1\",\"name\":\"default\",\"slug\":\"default\",\"org_id\":\"org_1\",\"inserted_at\":\"2024-01-01T00:00:00Z\"}"));
+
+        Workspace ws = newClient().getWorkspace("ws_1");
+        assertEquals("ws_1", ws.id());
+        assertEquals("org_1", ws.orgId());
+
+        RecordedRequest req = server.takeRequest(1, TimeUnit.SECONDS);
+        assertEquals("GET", req.getMethod());
+        assertEquals("/v1/workspaces/ws_1", req.getPath());
+    }
+
+    @Test
+    void testUpdateWorkspace() throws Exception {
+        server.enqueue(new MockResponse()
+                .setHeader("Content-Type", "application/json")
+                .setBody("{\"id\":\"ws_1\",\"name\":\"renamed\",\"slug\":\"default\",\"org_id\":\"org_1\",\"inserted_at\":\"2024-01-01T00:00:00Z\"}"));
+
+        Workspace ws = newClient().updateWorkspace("ws_1",
+                UpdateWorkspaceInput.builder().name("renamed").build());
+        assertEquals("renamed", ws.name());
+
+        RecordedRequest req = server.takeRequest(1, TimeUnit.SECONDS);
+        assertEquals("PATCH", req.getMethod());
+        assertEquals("/v1/workspaces/ws_1", req.getPath());
+        assertTrue(req.getBody().readUtf8().contains("\"name\":\"renamed\""));
+    }
+
+    @Test
+    void testDeleteWorkspace() throws Exception {
+        server.enqueue(new MockResponse().setResponseCode(204));
+
+        newClient().deleteWorkspace("ws_1");
+
+        RecordedRequest req = server.takeRequest(1, TimeUnit.SECONDS);
+        assertEquals("DELETE", req.getMethod());
+        assertEquals("/v1/workspaces/ws_1", req.getPath());
     }
 
     // ---- Error Handling ----
