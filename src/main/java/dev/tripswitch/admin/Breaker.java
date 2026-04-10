@@ -3,13 +3,14 @@ package dev.tripswitch.admin;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import java.util.List;
 import java.util.Map;
 
 /** A circuit breaker configuration. */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record Breaker(
         @JsonProperty("id") String id,
-        @JsonProperty("router_id") String routerId,
+        @JsonProperty("router_ids") List<String> routerIds,
         @JsonProperty("name") String name,
         @JsonProperty("metric") String metric,
         @JsonProperty("kind") BreakerKind kind,
@@ -30,9 +31,9 @@ public record Breaker(
         @JsonProperty("actions") Map<String, Object> actions,
         @JsonProperty("metadata") Map<String, String> metadata
 ) {
-    /** Returns a copy of this breaker with the given router ID. */
-    public Breaker withRouterId(String routerId) {
-        return new Breaker(id, routerId, name, metric, kind, kindParams, op, threshold, windowMs,
+    /** Returns a copy of this breaker with the given router IDs. */
+    public Breaker withRouterIds(List<String> routerIds) {
+        return new Breaker(id, routerIds, name, metric, kind, kindParams, op, threshold, windowMs,
                 minCount, minStateDurationMs, cooldownMs, evalIntervalMs, halfOpenConfirmationMs,
                 halfOpenBackoffEnabled, halfOpenBackoffCapMs, halfOpenIndeterminatePolicy,
                 recoveryWindowMs, recoveryAllowRateRampSteps, actions, metadata);

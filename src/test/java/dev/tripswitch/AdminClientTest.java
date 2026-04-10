@@ -162,12 +162,12 @@ class AdminClientTest {
         server.enqueue(new MockResponse()
                 .setHeader("Content-Type", "application/json")
                 .setResponseCode(201)
-                .setBody("{\"breaker\":{\"id\":\"b_456\",\"name\":\"api-latency\",\"kind\":\"p95\",\"op\":\"gt\",\"threshold\":500.0},\"router_id\":\"r_789\"}"));
+                .setBody("{\"breaker\":{\"id\":\"b_456\",\"name\":\"api-latency\",\"kind\":\"p95\",\"op\":\"gt\",\"threshold\":500.0},\"router_ids\":[\"r_789\"]}"));
 
         Breaker breaker = newClient().createBreaker("proj_123",
                 new CreateBreakerInput("api-latency", "latency_ms", BreakerKind.P95, BreakerOp.GT, 500));
         assertEquals("b_456", breaker.id());
-        assertEquals("r_789", breaker.routerId());
+        assertEquals(List.of("r_789"), breaker.routerIds());
         assertEquals("api-latency", breaker.name());
 
         RecordedRequest req = server.takeRequest(1, TimeUnit.SECONDS);
@@ -179,11 +179,11 @@ class AdminClientTest {
     void testGetBreaker() throws Exception {
         server.enqueue(new MockResponse()
                 .setHeader("Content-Type", "application/json")
-                .setBody("{\"breaker\":{\"id\":\"b_456\",\"name\":\"test-breaker\"},\"router_id\":\"r_789\"}"));
+                .setBody("{\"breaker\":{\"id\":\"b_456\",\"name\":\"test-breaker\"},\"router_ids\":[\"r_789\"]}"));
 
         Breaker breaker = newClient().getBreaker("proj_123", "b_456");
         assertEquals("b_456", breaker.id());
-        assertEquals("r_789", breaker.routerId());
+        assertEquals(List.of("r_789"), breaker.routerIds());
 
         RecordedRequest req = server.takeRequest(1, TimeUnit.SECONDS);
         assertEquals("GET", req.getMethod());
@@ -194,7 +194,7 @@ class AdminClientTest {
     void testUpdateBreaker() throws Exception {
         server.enqueue(new MockResponse()
                 .setHeader("Content-Type", "application/json")
-                .setBody("{\"breaker\":{\"id\":\"b_456\",\"name\":\"test\",\"threshold\":0.75},\"router_id\":\"r_789\"}"));
+                .setBody("{\"breaker\":{\"id\":\"b_456\",\"name\":\"test\",\"threshold\":0.75},\"router_ids\":[\"r_789\"]}"));
 
         Breaker breaker = newClient().updateBreaker("proj_123", "b_456",
                 UpdateBreakerInput.builder().threshold(0.75).build());
