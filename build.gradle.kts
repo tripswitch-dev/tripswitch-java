@@ -2,6 +2,7 @@ plugins {
     `java-library`
     `maven-publish`
     signing
+    id("io.github.gradle-nexus.publish-plugin") version "2.0.0"
 }
 
 group = "dev.tripswitch"
@@ -86,14 +87,7 @@ publishing {
         }
     }
     repositories {
-        maven {
-            name = "OSSRH"
-            url = uri("https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/")
-            credentials {
-                username = project.findProperty("ossrhUsername") as String? ?: System.getenv("OSSRH_USERNAME") ?: ""
-                password = project.findProperty("ossrhPassword") as String? ?: System.getenv("OSSRH_PASSWORD") ?: ""
-            }
-        }
+        sonatype()
     }
 }
 
@@ -104,4 +98,15 @@ signing {
         useInMemoryPgpKeys(signingKey, signingPassword)
     }
     sign(publishing.publications["mavenJava"])
+}
+
+nexusPublishing {
+    repositories {
+        sonatype {
+            nexusUrl.set(uri("https://ossrh-staging-api.central.sonatype.com/service/local/"))
+            snapshotRepositoryUrl.set(uri("https://central.sonatype.com/repository/maven-snapshots/"))
+            username = System.getenv("MAVEN_CENTRAL_USERNAME") ?: ""
+            password = System.getenv("MAVEN_CENTRAL_PASSWORD") ?: ""
+        }
+    }
 }
