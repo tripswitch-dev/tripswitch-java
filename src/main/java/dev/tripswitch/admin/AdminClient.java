@@ -178,7 +178,7 @@ public class AdminClient implements Closeable {
     @JsonIgnoreProperties(ignoreUnknown = true)
     private record BreakerResponse(
             @JsonProperty("breaker") Breaker breaker,
-            @JsonProperty("router_id") String routerId
+            @JsonProperty("router_ids") List<String> routerIds
     ) {}
 
     // ---- Projects ----
@@ -251,8 +251,8 @@ public class AdminClient implements Closeable {
     }
 
     private static Breaker unwrapBreaker(BreakerResponse resp) {
-        if (resp != null && resp.breaker() != null && resp.routerId() != null) {
-            return resp.breaker().withRouterId(resp.routerId());
+        if (resp != null && resp.breaker() != null && resp.routerIds() != null) {
+            return resp.breaker().withRouterIds(resp.routerIds());
         }
         return resp != null ? resp.breaker() : null;
     }
@@ -562,6 +562,28 @@ public class AdminClient implements Closeable {
             @Override
             public dev.tripswitch.TripSwitchException getError() { return error; }
         };
+    }
+
+    // ---- Workspaces ----
+
+    public ListWorkspacesResponse listWorkspaces(RequestOptions... opts) {
+        return execute("GET", "/v1/workspaces", null, null, firstOr(opts), ListWorkspacesResponse.class);
+    }
+
+    public Workspace createWorkspace(CreateWorkspaceInput input, RequestOptions... opts) {
+        return execute("POST", "/v1/workspaces", input, null, firstOr(opts), Workspace.class);
+    }
+
+    public Workspace getWorkspace(String workspaceId, RequestOptions... opts) {
+        return execute("GET", "/v1/workspaces/" + workspaceId, null, null, firstOr(opts), Workspace.class);
+    }
+
+    public Workspace updateWorkspace(String workspaceId, UpdateWorkspaceInput input, RequestOptions... opts) {
+        return execute("PATCH", "/v1/workspaces/" + workspaceId, input, null, firstOr(opts), Workspace.class);
+    }
+
+    public void deleteWorkspace(String workspaceId, RequestOptions... opts) {
+        execute("DELETE", "/v1/workspaces/" + workspaceId, null, null, firstOr(opts), Void.class);
     }
 
     // ---- Lifecycle ----

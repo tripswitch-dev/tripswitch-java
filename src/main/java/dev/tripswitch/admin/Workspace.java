@@ -3,12 +3,14 @@ package dev.tripswitch.admin;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-/** A project API key (eb_pk_...). */
+import java.time.Instant;
+
+/** A Tripswitch workspace. */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record ProjectKey(
+public record Workspace(
         @JsonProperty("id") String id,
         @JsonProperty("name") String name,
-        @JsonProperty("key_prefix") String keyPrefix,
-        @JsonProperty("last_used_at") String lastUsedAt,
-        @JsonProperty("inserted_at") String insertedAt
+        @JsonProperty("slug") String slug,
+        @JsonProperty("org_id") String orgId,
+        @JsonProperty("inserted_at") Instant insertedAt
 ) {}
